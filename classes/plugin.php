@@ -29,65 +29,420 @@ defined('ABSPATH') or die('Direct access to files is not allowed.');
 
 class Plugin {
 	
+	protected $_callbacks = array(
+	    'install' => array(),
+	    'deactivation' => array(),
+	    'activation' => array(),
+	    'upgrading' => array(),
+	    'downgrading' => array(),
+	);
+	
+	var $_file;
+	
 	/**
 	 * Method hooks into the appropriate wordpress actions.
 	 */
-	function __construct() {
+	function __construct( $file = false ) {
 		
-		//add_action wp_style_enqueue
-		//add_action wp_script_enqueue
+		if ($file) {
+			$this->_file = $file;
+		}
 		
-		//add_action plugin_activation, array($this, '_activate')
-		//add_action plugin_deactivation, array($this, '_deactivate')
+		// hooking our actions
+		add_action( 'admin_init', array($this, 'admin_init') );
 		
+		add_action( 'wp_enqueue_scripts', array($this, 'wp_enqueue_scripts') );
+		add_action( 'admin_enqueue_scripts', array($this, 'admin_enqueue_scripts') );
+		add_action( 'login_enqueue_scripts', array($this, 'login_enqueue_scripts') );
+		
+		register_activation_hook( $this->_file, array($this, '_activate') );
+		register_deactivation_hook( $this->_file, array($this, '_deactivate') );
+		register_uninstall_hook( $this->_file, array($this, '_uninstall') );
 	}
 	
-	protected $_activation_callback = array();
+	/**
+	 * Method is called upon the WordPress do_action(admin_init)
+	 */
+	public function admin_init() {
+		// check to see if we're upgrading or downgrading this plugin
+		$version = get_option($this->get_plugin_dir_name().'-version');
+		if (!$version) {
+			$this->_installing();
+			
+		} elseif (version_compare( $this->_version, $version, '>' )) {
+			$this->_upgrading($version);
+			
+		} elseif (version_compare( $this->_version, $version, '<' )) {
+			$this->_downgrading($version);
+		}
+	}
+	
+	protected $_queue = array(
+	    'styles' => array(),
+	    'scripts' => array()
+	);
 	
 	/**
-	 * Method sets the callback to be called on activation
+	 * Methods are called by wordpress actions and enqueue our
+	 * scripts accordingly
+	 */
+	public function login_enqueue_scripts() {
+		$this->enqueue_scripts( 'login' );
+		$this->enqueue_style( 'login' );
+	}
+	public function admin_enqueue_scripts() {
+		$this->enqueue_scripts( 'admin' );
+		$this->enqueue_style( 'admin' );
+	}
+	public function wp_enqueue_scripts() {
+		$this->enqueue_scripts( 'front' );
+		$this->enqueue_style( 'front' );
+	}
+	
+	/**
+	 * Method enqueues the scripts that have been preloaded
+	 * 
+	 * @param type $type
+	 */
+	private function enqueue_scripts( $type ) {
+		foreach((array)$this->_queue['scripts'] as $script) {
+			if (!$script[$type]) continue;
+			
+			// custom callback 
+			if ($script['show_callback']
+				&& call_user_func($script['show_callback'], $this)) 
+				continue;
+			
+			wp_enqueue_script( 
+					$script['handle'], 
+					$script['src'], 
+					$script['deps'], 
+					$script['ver'], 
+					$script['in_footer']
+				);
+		}
+	}
+	
+	/**
+	 * Method enqueues the styles that have been preloaded
+	 * 
+	 * @param type $type
+	 */
+	private function enqueue_style( $type ) {
+		foreach((array)$this->_queue['styles'] as $style) {
+			if (!$style[$type]) continue;
+			
+			// custom callback 
+			if ($style['show_callback']
+				&& call_user_func($style['show_callback'], $this)) 
+				continue;
+			
+			wp_enqueue_style( 
+					$style['handle'], 
+					$style['src'], 
+					$style['deps'], 
+					$style['ver'], 
+					$style['media']
+				);
+		}
+	}
+	
+	/**
+	 * Method makes sure that all data saved is good data
+	 * 
+	 * @param type $args
+	 */
+	public function queue( $args = array() ) {
+		
+		$defaults = array(
+			'handle'	=> false,
+			'src'		=> false,
+			'deps'		=> array(),
+			'show_callback' => false,
+			'admin'		=> true,
+			'editor'	=> false,
+			'front'		=> true,
+			'login'		=> false,
+			'in_footer'	=> false,
+			'media'		=> 'all',
+			'ver'		=> $this->_version
+		);
+		
+		$args = wp_parse_args($args, $defaults);
+		if (!$args['src']) return false;
+		
+		// build a handle if it doesn't exist
+		if (!$args['handle']) {
+			$args['handle'] = \Shorthand\slug( $args['src'] );
+		}
+		
+		// get the file extension
+		$parts = explode('.', $args['src']);
+		$ext = strtolower(array_pop($parts));
+		$args['ext'] = $ext;
+		
+		// locate the file
+		// add the script to the registry
+		if ($ext == 'css' && !file_exists($args['src'])) {
+			$args['src'] = \Shorthand\locate($args['src'], 
+				$this->get_style_dirs());
+			$args['src'] = \Shorthand\dir_to_url($args['src']);
+			
+			$this->_queue['styles'][ $args['handle'] ] = $args;
+			
+		} elseif ($ext == 'js' && !file_exists($args['src'])) {
+			$args['src'] = \Shorthand\locate($args['src'], 
+				$this->get_script_dirs());
+			$args['src'] = \Shorthand\dir_to_url($args['src']);
+			
+			$this->_queue['scripts'][ $args['handle'] ] = $args;
+			
+		}
+		
+		return $args['handle'];
+	}
+	
+	/**
+	 * Method allows the developer to register an installation callback
 	 * 
 	 * @param type $callback
 	 */
-	public function on_activation( $callback ) {
-		$this->_activation_callback[] = $callback;
+	public function set_install_callback( $callback ) {
+		$this->_callbacks['install'][] = $callback;
+	}
+	
+	/**
+	 * 
+	 * @return boolean
+	 */
+	private function _install() {
+		// does the user have permission to do this?
+		if (!current_user_can('activate_plugins')) return false;
+		
+		// Save the version to the database for later upgrade/downgrade
+		// plugin calls
+		if (!get_option($this->get_plugin_dir_name().'-version')) {
+			add_option($this->get_plugin_dir_name().'-version', 
+				$this->_version, false, true);
+		}
+		
+		$param_arr = array();
+		$param_arr['plugin'] = $this;
+		
+		foreach ((array)$this->callbacks['install'] as $callback) {
+			if (!is_callable($callback)) continue;
+			call_user_func_array($callback, $param_arr);
+		}
+		// fire our callback
+		$this->on_install();
+	}
+	
+	/**
+	 * 
+	 */
+	private function on_install() {
+		
+	}
+	
+	/**
+	 * Method allows the developer to register callbacks for the upgrade
+	 * process
+	 * 
+	 * @param type $callback
+	 */
+	public function set_upgrading_callback( $callback ) {
+		$this->callbacks['upgrading'][] = $callback;
+	}
+	
+	/**
+	 * Method fires all upgrading callbacks and corrects the version number
+	 * 
+	 * @param type $old_version
+	 */
+	private function _upgrading( $old_version ) {
+		// does the user have permission to do this?
+		if (!current_user_can('activate_plugins')) return false;
+		
+		// set to the new version
+		update_option($this->get_plugin_dir_name().'-version', 
+				$this->_version);
+		
+		$param_arr = array();
+		$param_arr['plugin'] = $this;
+		$param_arr['old_version'] = $old_version;
+		
+		foreach ((array)$this->callbacks['upgrading'] as $callback) {
+			if (!is_callable($callback)) continue;
+			call_user_func_array($callback, $param_arr);
+		}
+		// fire our callback
+		$this->on_upgrade( $old_version );
+	}
+	
+	/**
+	 * 
+	 * @param type $old_version
+	 */
+	private function on_upgrade( $old_version ) {
+		
+	}
+	
+	/**
+	 * Method allows the developer to set specific callbacks for the 
+	 * downgrading process.
+	 * 
+	 * @param type $callback
+	 */
+	public function set_downgrading_callback( $callback ) {
+		$this->callbacks['downgrading'][] = $callback;
+	}
+	
+	/**
+	 * Method fires all downgrading callbacks and corrects the version number
+	 * 
+	 * @param type $old_version
+	 */
+	private function _downgrading( $old_version ) {
+		// does the user have permission to do this?
+		if (!current_user_can('activate_plugins')) return false;
+		
+		// set to the new version
+		update_option($this->get_plugin_dir_name().'-version', 
+				$this->_version);
+		
+		$param_arr = array();
+		$param_arr['plugin'] = $this;
+		$param_arr['old_version'] = $old_version;
+		
+		foreach ((array)$this->callbacks['downgrading'] as $callback) {
+			if (!is_callable($callback)) continue;
+			call_user_func_array($callback, $param_arr);
+		}
+		
+		// fire in house callback
+		$this->on_downgrade( $old_version );
+	}
+	
+	/**
+	 * 
+	 * @param type $old_version
+	 */
+	private function on_downgrade( $old_version ) {
+		
+	}
+	
+	/**
+	 * Method let's us know if the current user can activate or
+	 * deactivate this plugin
+	 * 
+	 * @return boolean
+	 */
+	private function can_activate() {
+		// does the user have permission to do this?
+		if (!current_user_can('activate_plugins')) return false;
+		
+		// double checking that we're deactiving THIS plugin
+		$plugin = isset($_REQUEST['plugin']) ? $_REQUEST['plugin'] : '';
+		$parts = explode(DS, \Shorthand\clean_path($plugin));
+		$plugin = (isset($parts[0])) ?$parts[0] :'';
+		if ($plugin != $this->get_plugin_dir_name()) return false;
+		
+		return true;
 	}
 	
 	/**
 	 * Method is called by wordpress when this plugin gets activated
 	 */
-	function _activate() {
-		$param_arr = func_get_args();
-		$param_arr['plugin_class'] = $this;
+	public function _activate() {
+		if (!$this->can_activate()) return false;
 		
-		foreach ($this->_activation_callback as $callback) {
+		// call any preset activation callbacks
+		$param_arr = array();
+		$param_arr['plugin'] = $this;
+		
+		ob_start();
+		foreach ((array)$this->callbacks['activation'] as $callback) {
+			if (!is_callable($callback)) continue;
 			call_user_func_array($callback, $param_arr);
 		}
+		
+		// call our internal activation process
+		$this->on_activation($param_arr);
+		ob_clean();
 	}
 	
-	protected $_deactivation_callback = array();
+	/**
+	 * Method sets the callback to be called on activation
+	 * 
+	 * @param type $callback 
+	 */
+	public function set_activation_callback( $callback ) {
+		$this->callbacks['activation'][] = $callback;
+	}
 	
 	/**
-	 * Method sets the callback for when this plugin gets deactivated
+	 * Method is called on activation. This should be called be any overriding
+	 * functions so that we can do our own activation processess.
 	 * 
-	 * @param type $callback
+	 * @param type $args
 	 */
-	public function on_deactivation( $callback ) {
-		$this->_deactivation_callback[] = $callback;
+	private function on_activation( $args ) {
+		
 	}
 	
 	/**
 	 * Method is called by wordpress when this plugin gets activated
 	 */
 	function _deactivate() {
-		$param_arr = func_get_args();
-		$param_arr['plugin_class'] = $this;
+		if (!$this->can_activate()) return false;
 		
-		foreach ($this->_deactivation_callback as $callback) {
+		// call any preset deactivation callbacks
+		$param_arr = array();
+		$param_arr['plugin'] = $this;
+		
+		ob_start();
+		foreach ($this->_callbacks['deactivation'] as $callback) {
+			if (!is_callable($callback)) continue;
 			call_user_func_array($callback, $param_arr);
 		}
+		
+		// call our internal deactivation process
+		$this->on_deactivation($param_arr);
+		ob_clean();
 	}
 	
+	/**
+	 * Method sets the callback for when this plugin gets deactivated
+	 * 
+	 * @param type $callback
+	 */
+	public function set_deactivation_callback( $callback ) {
+		$this->callbacks['deactivation'][] = $callback;
+	}
+	
+	/**
+	 * Method is called on the deactivation of this plugin
+	 * 
+	 * @param type $args
+	 */
+	private function on_deactivation( $args ) {
+		
+	}
+	
+	/**
+	 * Method will be called upon the deactivation of this plugin
+	 */
+	private function _uninstall() {
+		//if uninstall not called from WordPress exit
+		if ( !defined( 'WP_UNINSTALL_PLUGIN' ) ) exit();
+		if ($this->_file != WP_UNINSTALL_PLUGIN) return false;
+		
+		// remove plugin specific options
+		delete_option($this->get_plugin_dir_name().'-version');
+		
+		
+	}
+
 	protected $_version = '1.0';
 	
 	/**
@@ -99,151 +454,6 @@ class Plugin {
 	function version( $ver = '1.0' ) {
 		$this->_version = $ver;
 		return $this;
-	}
-	
-	/**
-	 * Method saves the appropriate data 
-	 * 
-	 * @param type $args
-	 */
-	public function queue( $args = array() ) {
-		
-		$defaults = array(
-			'handle'	=> false,
-			'src'		=> false,
-			'deps'		=> array(),
-			'admin'		=> true,
-			'login'		=> false,
-			'in_footer'	=> false,
-			'media'		=> 'all',
-			'editor'	=> false,
-			'ver'		=> $this->_version
-		);
-		
-		extract(wp_parse_args($args, $defaults));
-		
-		// get the file extension
-		$parts = explode('.', $src);
-		$ext = strtolower(array_pop($parts));
-		unset($parts);
-		
-		// build a handle if it doesn't exist
-		if (!$handle) {
-			$handle = \Shorthand\slug( $src );
-		}
-		
-		// exception for editor styles
-		$type = $editor ?'editor' :$ext;
-		
-		switch($type) {
-			case 'js':
-				$this->wp_enqueue_script($handle, $src, $deps, 
-					$ver, $in_footer);
-			break;
-			case 'css':
-				$this->wp_enqueue_style($handle, $src, 
-					$deps, $ver, $media);
-			break;
-			case 'editor':
-				// @TODO Figure out what parameters are accepted for wp_enqueue_media
-				$this->wp_enqueue_media(array());
-			break;
-			default:
-				throw new Exception("Cannot determine file "
-					. "type: $src");
-			break;
-		}
-		
-		return $handle;
-	}
-	
-	protected $_styles_editor = array();
-	
-	/**
-	 * Method...
-	 * 
-	 * @param type $args
-	 * @return type
-	 */
-	public function wp_enqueue_media( $args ) {
-		
-		$this->_styles_editor[$handle] = $args;
-		
-		return $handle;
-	}
-	
-	protected $_styles = array();
-	
-	/**
-	 * Method stays true to the wordpress declarations while this class
-	 * handles the action hooks for the styles. This method is designed
-	 * to be called directly, but it may be faster to use the shorthand
-	 * 
-	 * @see $this->queue()
-	 * 
-	 * @param type $handle
-	 * @param type $src
-	 * @param type $deps
-	 * @param type $ver
-	 * @param type $media
-	 * @return string $handle
-	 */
-	public function wp_enqueue_style($handle,
-					 $src,
-					 $deps = array(),
-					 $ver = false,
-					 $media = 'all') {
-		
-		if (!file_exists($src)) {
-			$src = \Shorthand\locate($src, $this->get_style_dirs());
-		}
-		
-		$this->_styles[$handle] = array(
-		    'handle'	=> $handle,
-		    'src'	=> $src,
-		    'deps'	=> $deps,
-		    'ver'	=> $ver ?$ver :$this->_version,
-		    'media'	=> $media
-		);
-		
-		return $handle;
-	}
-	
-	protected $_scripts = array();
-	
-	/**
-	 * Method stays true to the wordpress delcarations while this class
-	 * handles the action hooks for the scripts. This method is designed
-	 * to be called directly, but it may be faster to use the shorthand
-	 * 
-	 * @SEE $this->queue()
-	 * 
-	 * @param type $handle
-	 * @param type $src
-	 * @param type $deps
-	 * @param type $ver
-	 * @param type $in_footer
-	 * @return string $handle
-	 */
-	public function wp_enqueue_script($handle, 
-					  $src, 
-					  $deps = array(), 
-					  $ver = false,
-					  $in_footer = false) {
-		
-		if (!file_exists($src)) {
-			$src = \Shorthand\locate($src, $this->get_script_dirs());
-		}
-		
-		$this->_scripts[$handle] = array(
-		    'handle'	=> $handle,
-		    'src'	=> $src,
-		    'deps'	=> $deps,
-		    'ver'	=> $ver ?$ver :$this->_version,
-		    'in_footer'	=> $in_footer
-		    );
-		
-		return $handle;
 	}
 	
 	protected $_cron = array();
@@ -351,6 +561,36 @@ class Plugin {
 	}
 	
 	/**
+	 * Method returns an array of overriding directories. This list is
+	 * sorted by default first and overriding in last position.
+	 * 
+	 * @param string $subdirectory
+	 * @return array
+	 */
+	public function get_override_dirs( $subdirectory = '' ) {
+		
+		if ($subdirectory) {
+			$subdirectory .= DS;
+		}
+		
+		$dirs = array();
+		
+		// The active theme directory
+		$dirs[] =  \Shorthand\get_theme_path().DS.
+				$this->get_plugin_dir_name().DS.$subdirectory;
+		
+		// @TODO The Parent theme directory
+		
+		// The plugin directory
+		$dirs[] = $this->get_plugin_dir().DS.$subdirectory;
+		
+		// The shorthand directory
+		$dirs[] = $this->get_shorthand_dir().DS.$subdirectory;
+		
+		return $dirs;
+	}
+	
+	/**
 	 * Method returns the directories name that this plugin is within
 	 * 
 	 * @return string
@@ -368,36 +608,6 @@ class Plugin {
 	
 	public function get_shorthand_dir() {
 		return \Shorthand\clean_path( plugin_dir_path(__dir__) );
-	}
-	
-	/**
-	 * Method returns an array of overriding directories. This list is
-	 * sorted by default first and overriding in last position.
-	 * 
-	 * @param string $subdirectory
-	 * @return array
-	 */
-	public function get_override_dirs( $subdirectory = '' ) {
-		
-		if ($subdirectory) {
-			$subdirectory .= DS;
-		}
-		
-		$dirs = array();
-		
-		// The shorthand directory
-		$dirs[] = $this->get_shorthand_dir().DS.$subdirectory;
-		
-		// The plugin directory
-		$dirs[] = $this->get_plugin_dir().DS.$subdirectory;
-		
-		// @TODO The Parent theme directory
-		
-		// The active theme directory
-		$dirs[] =  \Shorthand\get_theme_path().DS.
-				$this->get_plugin_dir_name().DS.$subdirectory;
-		
-		return $dirs;
 	}
 	
 	/**
@@ -425,45 +635,13 @@ class Plugin {
 	}
 	
 	/**
-	 * Method returns an array of overriding directories. This list is
-	 * sorted by default first and overriding in last position.
-	 * 
-	 * @param string $subdirectory
-	 * @return array
-	 */
-	public function get_override_urls( $subdirectory = '' ) {
-		
-		if ($subdirectory) {
-			$subdirectory .= '/';
-		}
-		
-		$dirs = array();
-		
-		// The shorthand directory
-		$dirs[] = \Shorthand\clean_url( 
-			plugin_dir_url(__file__).'/'.$subdirectory ).'/';
-		
-		// The plugin directory
-		$dirs[] = \Shorthand\clean_url( 
-			$this->get_plugin_url().'/'.$subdirectory ).'/';
-		
-		// @TODO The Parent theme directory
-		
-		// The active theme directory
-		$dirs[] =  \Shorthand\get_theme_path().'/'.
-				$this->get_plugin_dir_name().'/'.$subdirectory;
-		
-		return $dirs;
-	}
-	
-	/**
 	 * Method returns an array of directories that style files may be
 	 * located in. This list is prioritized by overriding to default.
 	 * 
 	 * @return array
 	 */
 	public function get_style_dirs() {
-		return $this->get_override_urls( 'style' );
+		return $this->get_override_dirs( 'css' );
 	}
 	
 	/**
@@ -473,7 +651,7 @@ class Plugin {
 	 * @return array
 	 */
 	public function get_script_dirs() {
-		return $this->get_override_urls( 'js' );
+		return $this->get_override_dirs( 'js' );
 	}
 	
 }

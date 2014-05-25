@@ -33,10 +33,16 @@ defined('ABSPATH') or die('Direct access to files is not allowed.');
  * @param type $uncleanStr
  * @return string $cleanStr
  */
-function slug( $uncleanStr ) {
-
-
-	return $cleanStr;
+function slug($string) {
+	//Unwanted:  {UPPERCASE} ; / ? : @ & = + $ , . ! ~ * ' ( )
+	$string = strtolower($string);
+	//Strip any unwanted characters
+	$string = preg_replace("/[^a-z0-9_\s-]/", "", $string);
+	//Clean multiple dashes or whitespaces
+	$string = preg_replace("/[\s-]+/", " ", $string);
+	//Convert whitespaces and underscore to dash
+	$string = preg_replace("/[\s_]/", "-", $string);
+	return $string;
 }
 
 /**
@@ -56,7 +62,7 @@ function hello_world() {
  */
 function locate( $needle, $haystack = array() ) {
 	$fullpath = $needle;
-	foreach ($haystack as $directory) {
+	foreach ((array)$haystack as $directory) {
 		if (!file_exists($directory.$needle)) continue;
 		$fullpath = $directory.$needle;
 		break;
@@ -65,18 +71,69 @@ function locate( $needle, $haystack = array() ) {
 }
 
 /**
- * Function returns a well formed globally unique identifier
+ * Create Global Unique Identifier
+ * 
+ * Method will activate only if sugar has not already activated this
+ * same method. This method has been copied from the sugar files and
+ * is used for cakphp database saving methods.
+ * 
+ * There is no format to these unique ID's other then that they are
+ * globally unique and based on a microtime value
+ * 
+ * @return string //aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
  */
 function create_guid() {
-	
+	$microTime = microtime();
+	list($a_dec, $a_sec) = explode(" ", $microTime);
+
+	$dec_hex = sprintf("%x", $a_dec * 1000000);
+	$sec_hex = sprintf("%x", $a_sec);
+
+	\shorthand\ensure_length($dec_hex, 5);
+	\shorthand\ensure_length($sec_hex, 6);
+
+	$guid = "";
+	$guid .= $dec_hex;
+	$guid .= \shorthand\create_guid_section(3);
+	$guid .= '-';
+	$guid .= \shorthand\create_guid_section(4);
+	$guid .= '-';
+	$guid .= \shorthand\create_guid_section(4);
+	$guid .= '-';
+	$guid .= \shorthand\create_guid_section(4);
+	$guid .= '-';
+	$guid .= $sec_hex;
+	$guid .= \shorthand\create_guid_section(6);
+
+	return $guid;
+}
+function create_guid_section($characters) {
+	$return = "";
+	for ($i = 0; $i < $characters; $i++) {
+		$return .= sprintf("%x", mt_rand(0, 15));
+	}
+	return $return;
+}
+function ensure_length(&$string, $length) {
+	$strlen = strlen($string);
+	if ($strlen < $length) {
+		$string = str_pad($string, $length, "0");
+	} else if ($strlen > $length) {
+		$string = substr($string, 0, $length);
+	}
 }
 
 /**
  * Method returns the directory path to the active theme
  * 
  */
+function get_theme_folder() {
+	$parts = explode('/', get_bloginfo('stylesheet_directory'));
+	return array_pop($parts);
+}
 function get_theme_path() {
-	return \Shorthand\clean_path( get_theme_root() );
+	return \Shorthand\clean_path( get_theme_root().
+		DS.\Shorthand\get_theme_folder() );
 }
 
 function clean_path( $uncleanPath ) {
@@ -85,6 +142,17 @@ function clean_path( $uncleanPath ) {
 }
 
 function clean_url( $uncleanUrl ) {
-	$cleanUrl = rtrim($uncleanUrl, '/');
+	$cleanUrl = rtrim(str_replace('\\', '/', $uncleanUrl), '/');
 	return $cleanUrl;
+}
+
+/**
+ * Function replaces the directory path with a valid url path
+ * 
+ * @param type $dir
+ */
+function dir_to_url( $dir ) {
+	return \Shorthand\clean_url(str_replace(\Shorthand\clean_path(ABSPATH),
+		get_bloginfo('home'),
+		$dir));
 }
