@@ -17,7 +17,7 @@ jQuery(document).ready(function(){
 			<?php endforeach ?>
 		],
 		tableTools: {
-			sSwfPath: "<?php echo \Shorthand\dir_to_url(dirname(__dir__)) ?>/shorthand/js/dataTable/TableTools/swf/copy_csv_xls_pdf.swf", 
+			sSwfPath: "<?php echo \Shorthand\dir_to_url(dirname(__dir__)) ?>/js/dataTable/TableTools/swf/copy_csv_xls_pdf.swf", 
 		},
 		dom: 'T<"clear">lfrtip'
 	});
@@ -25,7 +25,7 @@ jQuery(document).ready(function(){
 	jQuery('.DTTT_button').addClass('button');
 });
 </script>
-<div style="overflow-x:scroll;border-right:10px solid #ddd;">
+<div class="datatable_wrapper">
 	<table id="m<?php echo $unique ?>" class="display">
 	    <thead>
 		<tr>

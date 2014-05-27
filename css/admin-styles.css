@@ -50,3 +50,68 @@ div.tab-toolbar a.button-primary{color:#fff!important}
 
 .shorthand-tab-wrapper .postbox{background-color: #fafafa;}
 .shorthand-tab-wrapper .postbox .hndle{font-weight:bold;}
+
+.datatable_wrapper {overflow-x:scroll;border-right:10px solid #ddd;}
+
+.DTTT_button {position: relative;margin-right:5px!important;}
+.DTTT_container {float: right;padding: 0 0 20px;}
+
+.DTTT_Print #wpbody-content {width:auto}
+.DTTT_Print .postbox, .DTTT_Print {background:#fff;margin:0;}
+.DTTT_Print #wpcontent {margin-left:0;}
+.DTTT_Print #wpbody > .wrap {margin:0;}
+.DTTT_Print .datatable_wrapper {border:0;overflow:visible;}
+.DTTT_Print .inner-wrapper {border:0;padding:0;}
+
+.DTTT_print_info {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	width: 400px;
+	height: 150px;
+	margin-left: -200px;
+	margin-top: -75px;
+	text-align: center;
+	color: #333;
+	padding: 10px 30px;
+
+	background: #ffffff; /* Old browsers */
+	background: -webkit-linear-gradient(top, #ffffff 0%,#f3f3f3 89%,#f9f9f9 100%); /* Chrome10+,Safari5.1+ */
+	background:    -moz-linear-gradient(top, #ffffff 0%,#f3f3f3 89%,#f9f9f9 100%); /* FF3.6+ */
+	background:     -ms-linear-gradient(top, #ffffff 0%,#f3f3f3 89%,#f9f9f9 100%); /* IE10+ */
+	background:      -o-linear-gradient(top, #ffffff 0%,#f3f3f3 89%,#f9f9f9 100%); /* Opera 11.10+ */
+	background:         linear-gradient(top, #ffffff 0%,#f3f3f3 89%,#f9f9f9 100%); /* W3C */
+	filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#ffffff', endColorstr='#f9f9f9',GradientType=0 ); /* IE6-9 */
+	
+	opacity: 0.95;
+
+	border: 1px solid black;
+	border: 1px solid rgba(0, 0, 0, 0.5);
+	
+	-webkit-border-radius: 6px;
+	   -moz-border-radius: 6px;
+	    -ms-border-radius: 6px;
+	     -o-border-radius: 6px;
+	        border-radius: 6px;
+	
+	-webkit-box-shadow: 0 3px 7px rgba(0, 0, 0, 0.5);
+	   -moz-box-shadow: 0 3px 7px rgba(0, 0, 0, 0.5);
+	    -ms-box-shadow: 0 3px 7px rgba(0, 0, 0, 0.5);
+	     -o-box-shadow: 0 3px 7px rgba(0, 0, 0, 0.5);
+	        box-shadow: 0 3px 7px rgba(0, 0, 0, 0.5);
+}
+
+.DTTT_print_info h6 {
+	font-weight: normal;
+	font-size: 28px;
+	line-height: 28px;
+	margin: 1em;
+}
+
+.DTTT_print_info p {
+	font-size: 14px;
+	line-height: 20px;
+}
+
+
+
