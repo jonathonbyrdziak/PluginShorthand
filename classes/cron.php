@@ -31,7 +31,7 @@ defined('ABSPATH') or die('Direct access to files is not allowed.');
  * Class simplifies the WordPress Cron system
  * 
  */
-class Cron extends \Shorthand\Base
+class Cron extends Base
 {
 	/**
 	 * HTML 'id' attribute of the edit screen section

@@ -151,4 +151,33 @@ class Base {
 		
 		return $vars;
 	}
+	
+	/**
+	 * Method returns the called class
+	 *
+	 */
+	public static function get_called_class()
+	{
+		if (function_exists('get_called_class')) {
+			return get_called_class();
+		}
+	
+		$called_class = false;
+		$objects = array();
+		$traces = debug_backtrace();
+		foreach ($traces as $trace)
+		{
+			if (isset($trace['object'])) {
+				if (is_object($trace['object'])) {
+					$objects[] = $trace['object'];
+				}
+			}
+		}
+	
+		if (count($objects)) {
+			$called_class = get_class($objects[0]);
+		}
+	
+		return $called_class;
+	}
 }

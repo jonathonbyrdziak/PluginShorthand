@@ -1,0 +1,52 @@
+
+/* 
+ * The MIT License (MIT)
+ * 
+ * Copyright (c) 2014 Jonathon Byrd jonathonbyrd@gmail.com
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+/* 
+    Created on : May 25, 2014, 11:10:38 AM
+    Author     : Jonathon
+*/
+
+ul#shorthand-field-group-tabs{float:left;padding:0 0 0 15px;margin:0;display:none}
+ul#shorthand-field-group-tabs li{float:left;margin-bottom:-1px;background-color:transparent;margin-right:8px}
+ul#shorthand-field-group-tabs li.ui-state-hover a{background-color:#fafafa}
+ul#shorthand-field-group-tabs li.ui-state-hover a.ui-tab{border-color:#dfdfdf #dfdfdf #f9f9f9 #dfdfdf;color:#d54e21}
+ul#shorthand-field-group-tabs li.ui-state-acceptable a.ui-tab{border-color:#5a5 #5a5 #ccc #5a5;color:#8a8;background-color:#efe}
+ul#shorthand-field-group-tabs li.ui-state-active.ui-state-acceptable a.ui-tab{background-color:#f9f9f9}
+ul#shorthand-field-group-tabs li.drop-candidate a.ui-tab{background-color:#ffc;border-color:#aa5 #aa5 #ccc #aa5;color:#aa8}
+ul#shorthand-field-group-tabs li a.ui-tab{font-family:Georgia,"Times New Roman","Bitstream Charter",Times,serif;font-size:14px;display:block;margin-top:3px;padding:5px 10px 5px;border:1px solid #dfdfdf;border-bottom:0;border-radius:3px 3px 0 0;text-decoration:none;color:#aaa}
+ul#shorthand-field-group-tabs li.ui-state-active a.ui-tab{background-color:#f9f9f9;margin-top:-1px;padding:7px 10px 7px;border:1px solid #dfdfdf;border-bottom:1px solid transparent;color:#000}
+ul#shorthand-field-group-tabs li.ui-state-hover a.ui-tab {border-color: #dfdfdf #dfdfdf #f9f9f9 #dfdfdf;color: #d54e21;}
+ul#shorthand-field-group-tabs li.ui-state-hover a {background-color: #fafafa;}
+
+.tab-toolbar{background:#f9f9f9;border-width:1px 1px 0;border-radius:3px 3px 0 0;margin:-5px -6px 15px -6px;clear:left;padding:10px;border:1px solid #dfdfdf}
+.field-wrapper a.deletion,.tab-toolbar a.deletion{color:#f00;border-bottom:1px solid #f00;font-size:12px;text-decoration:none;padding:0;margin:-2px 0 0 5px}
+div.tab-toolbar a.button-primary{color:#fff!important}
+
+.tab-wrapper{clear:left;display:none;}
+.tab-wrapper.active-wrapper{display:block;}
+.inner-wrapper {background-color:#fff;padding:5px;border-left:1px solid #ccc;border-right:1px solid #ccc;border-radius:3px 3px 0 0;}
+#tabs-bottom {padding: 10px 0px 5px 10px;background: #f9f9f9;height: 32px;border: 1px solid #dfdfdf;border-radius: 0 0 3px 3px;}
+
+.shorthand-tab-wrapper .postbox{background-color: #fafafa;}
+.shorthand-tab-wrapper .postbox .hndle{font-weight:bold;}

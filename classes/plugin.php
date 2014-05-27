@@ -27,6 +27,9 @@ namespace Shorthand;
 
 defined('ABSPATH') or die('Direct access to files is not allowed.');
 
+/**
+ * 
+ */
 class Plugin {
 	
 	protected $_callbacks = array(
@@ -58,6 +61,22 @@ class Plugin {
 		register_activation_hook( $this->_file, array($this, '_activate') );
 		register_deactivation_hook( $this->_file, array($this, '_deactivate') );
 		register_uninstall_hook( $this->_file, array($this, '_uninstall') );
+		
+		// Register all shorthand media
+		$this->queue( array(
+			'src'	=> 'inheritance.js',
+			'deps'	=> array( 'jquery' )
+			) );
+		$this->queue( array(
+			'src'	=> 'utilities.js',
+			'deps'	=> array( 'inheritancejs' )
+			) );
+		
+		// Shorthand Styles
+		$this->queue( array(
+			'src'	=> 'admin-styles.css',
+			'admin'	=> true
+			) );
 	}
 	
 	/**
@@ -77,10 +96,223 @@ class Plugin {
 		}
 	}
 	
+	/**
+	 * Method handles the sql properly, returning a well formed array
+	 * 
+	 * @param type $sql
+	 */
+	public function select( $sql ) {
+		global $wpdb;
+		return $wpdb->get_results($sql, ARRAY_A);
+	}
+	
+	protected $_adminpages = array();
+	
+	/**
+	 * Method creates an administrative page
+	 * 
+	 * @param type $args
+	 * @return AdminPage Object
+	 */
+	public function admin( $args ) {
+		
+		require_once dirname(__file__).DS.'adminpage.php';
+
+		$defaults = array(
+		    'id'		=> $this->get_plugin_dir_name(),
+		    'page_title'	=> false,
+		    'menu_title'	=> false,
+		    'parent_menu'	=> 'settings'
+		);
+		
+		if (is_string($args)) {
+			$name = $args;
+			$args = array();
+			$args['id'] = $name;
+		}
+		
+		$args = wp_parse_args($args, $defaults);
+		
+		// making sure the other titles are set as well
+		if (!$args['page_title']) {
+			$args['page_title'] = $args['id'];
+		}
+		if (!$args['menu_title']) {
+			$args['menu_title'] = $args['id'];
+		}
+		
+		$args['name'] = $args['id'];
+		
+		// create the instance
+		$this->_adminpages[$name] = AdminPage::getInstance(
+			$args['name'], $args);
+		
+		// preload the other media for tabs
+		if (!empty($args['tabs'])) {
+			$this->enqueue_scripts_shorthand();
+		}
+		
+		return $this->_adminpages[$name];
+	}
+	
+	protected $_metaboxes = array();
+	
+	/**
+	 * Method creates a metabox
+	 * 
+	 * @param type $args
+	 * @return Metabox Object
+	 */
+	public function metabox( $id, $args = array() ) {
+		
+		require_once dirname(__file__).DS.'metabox.php';
+
+		$defaults = array(
+		    'id'		=> $this->get_plugin_dir_name(),
+		    'page'		=> array('post','page'),
+		    'priority'		=> 'high',
+		    '_fields'		=> array(),
+		    'view_args'		=> false,
+		    'view'		=> false
+		);
+		
+		$args = wp_parse_args($args, $defaults);
+		
+		// treat the provided parameter as if it's a function
+		if ($args['view'] && is_callable($args['view'])) {
+			ob_start();
+			echo call_user_func($args['view'], $this, $args);
+			$args['view'] = ob_get_clean();
+			
+		// treat the parameter as if it's a filename
+		} elseif ($args['view']) {
+			if (!file_exists($args['view'])) {
+				$args['view'] = locate($args['view'], 
+					$this->get_override_dirs('templates'));
+			}
+			if ($args['view_args'] && is_array($args['view_args'])) {
+				foreach($args['view_args'] as $p => $v) {
+					if (!is_callable($v)) continue;
+					$args['view_args'][$p] = call_user_func($v);
+				}
+			}
+			$args['view'] = get_template($args['view'], $args['view_args']);
+		}
+		
+		// load the instance
+		$this->_metaboxes[$id] = Metabox::getInstance(
+			$id, $args);
+		
+		return $this->_metaboxes[$id];
+	}
+	
+	protected $_cron = array();
+	
+	/**
+	 * Method calls the cron class, which could easily be called directly.
+	 * However, this class keeps track of the cron instance without further
+	 * effort.
+	 * 
+	 * @SEE Cron
+	 * 
+	 * @param type $args
+	 * @return Cron
+	 */
+	public function cron( $args ) {
+		
+		require_once dirname(__file__).DS.'cron.php';
+
+		$defaults = array(
+		    'handle'	=> create_guid(),
+		    'callback'	=> 'hello_world',
+		    'single'	=> true,
+		    'schedule'	=> 60,
+		    'time'	=> false,
+		    'stop'	=> false,
+		    'direct'	=> false,
+		    'debug'	=> false
+		);
+		
+		extract(wp_parse_args($args, $defaults));
+		
+		$this->_cron[$handle] = Cron::getInstance($handle, array(
+			'callback'	=> $callback,
+			'single'	=> $single,
+			'schedule'	=> $schedule,
+			'time'		=> $time,
+			'stop'		=> $stop,
+			'debug'		=> $debug
+			));
+		
+		// make this callback available directly
+		if ($direct) {
+			add_action("wp_ajax_$handle", $callback);
+			add_action("wp_ajax_nopriv_$handle", $callback);
+			
+			$debug_callback = array($this->_cron[$handle], 
+						'force_debug');
+			
+			add_action("wp_ajax_$handle", $debug_callback);
+			add_action("wp_ajax_nopriv_$handle", $debug_callback);
+		}
+		
+		return $this->_cron[$handle];
+	}
+	
+	/**
+	 * Method returns a global instance of the Cron class
+	 * 
+	 * @param type $handle
+	 * @return Cron
+	 */
+	public function get_cron( $handle ) {
+		return isset($this->_cron[$handle]) ? $this->_cron[$handle]: null;
+	}
+	
+	protected $_widgets = array();
+	
+	/**
+	 * Method creates a new widget and stores the instance for later use
+	 * 
+	 * @param type $args
+	 * @return Widget
+	 */
+	public function widget( $args ) {
+		
+		require_once dirname(__file__).DS.'widget.php';
+
+		$defaults = array(
+		    'name'	=> 'Unnamed Widget',
+		    'description' => '',
+		    'fields'	=> array(
+			array(
+			    'type' => 'notification'
+			)
+		    )
+		);
+		
+		$args = wp_parse_args($args, $defaults);
+		
+		$this->_widgets[$name] = new Widget($args);
+		
+		return $this->_widgets[$name];
+	}
+	
 	protected $_queue = array(
 	    'styles' => array(),
 	    'scripts' => array()
 	);
+	
+	/**
+	 * 
+	 */
+	private function enqueue_scripts_shorthand() {
+		$this->queue( array(
+			'src'	=> 'main.js',
+			'deps'	=> array( 'utilitiesjs' ),
+			'admin' => true
+			) );
+	}
 	
 	/**
 	 * Methods are called by wordpress actions and enqueue our
@@ -106,19 +338,28 @@ class Plugin {
 	 */
 	private function enqueue_scripts( $type ) {
 		foreach((array)$this->_queue['scripts'] as $script) {
-			if (!$script[$type]) continue;
+			$func = 'wp_enqueue_script';
+			if (!$script[$type]) {
+				$func = 'wp_register_script';
+			}
 			
 			// custom callback 
 			if ($script['show_callback']
-				&& call_user_func($script['show_callback'], $this)) 
-				continue;
+				&& call_user_func($script['show_callback'], $this)) {
+				$func = 'wp_register_script';
+			}
 			
-			wp_enqueue_script( 
-					$script['handle'], 
-					$script['src'], 
-					$script['deps'], 
-					$script['ver'], 
-					$script['in_footer']
+			if (strpos($script['src'], 'http') !== 0) {
+				$script['src'] = locate($script['src'], 
+					$this->get_script_dirs());
+				$script['src'] = dir_to_url($script['src']);
+			}
+			
+			$func(  $script['handle'], 
+				$script['src'], 
+				$script['deps'], 
+				$script['ver'], 
+				$script['in_footer']
 				);
 		}
 	}
@@ -159,22 +400,32 @@ class Plugin {
 			'src'		=> false,
 			'deps'		=> array(),
 			'show_callback' => false,
-			'admin'		=> true,
+			'admin'		=> false,
 			'editor'	=> false,
-			'front'		=> true,
+			'front'		=> false,
 			'login'		=> false,
 			'in_footer'	=> false,
 			'media'		=> 'all',
 			'ver'		=> $this->_version
 		);
 		
-		$args = wp_parse_args($args, $defaults);
-		if (!$args['src']) return false;
+		if (is_string($args)) {
+			$src = $args;
+			$args = array();
+			$args['src'] = $src;
+		}
 		
 		// build a handle if it doesn't exist
 		if (!$args['handle']) {
-			$args['handle'] = \Shorthand\slug( $args['src'] );
+			$args['handle'] = slug( $args['src'] );
 		}
+		
+		if (isset($this->_queue['scripts'][ $args['handle'] ])) {
+			$defaults = $this->_queue['scripts'][ $args['handle'] ];
+		}
+			
+		$args = wp_parse_args($args, $defaults);
+		if (!$args['src']) return false;
 		
 		// get the file extension
 		$parts = explode('.', $args['src']);
@@ -184,17 +435,13 @@ class Plugin {
 		// locate the file
 		// add the script to the registry
 		if ($ext == 'css' && !file_exists($args['src'])) {
-			$args['src'] = \Shorthand\locate($args['src'], 
+			$args['src'] = locate($args['src'], 
 				$this->get_style_dirs());
-			$args['src'] = \Shorthand\dir_to_url($args['src']);
+			$args['src'] = dir_to_url($args['src']);
 			
 			$this->_queue['styles'][ $args['handle'] ] = $args;
 			
 		} elseif ($ext == 'js' && !file_exists($args['src'])) {
-			$args['src'] = \Shorthand\locate($args['src'], 
-				$this->get_script_dirs());
-			$args['src'] = \Shorthand\dir_to_url($args['src']);
-			
 			$this->_queue['scripts'][ $args['handle'] ] = $args;
 			
 		}
@@ -343,7 +590,7 @@ class Plugin {
 		
 		// double checking that we're deactiving THIS plugin
 		$plugin = isset($_REQUEST['plugin']) ? $_REQUEST['plugin'] : '';
-		$parts = explode(DS, \Shorthand\clean_path($plugin));
+		$parts = explode(DS, clean_path($plugin));
 		$plugin = (isset($parts[0])) ?$parts[0] :'';
 		if ($plugin != $this->get_plugin_dir_name()) return false;
 		
@@ -449,110 +696,18 @@ class Plugin {
 	 * Method sets the version number for this plugin
 	 * 
 	 * @param type $ver
-	 * @return \Shorthand\Plugin
+	 * @return Plugin
 	 */
 	function version( $ver = '1.0' ) {
 		$this->_version = $ver;
 		return $this;
 	}
 	
-	protected $_cron = array();
-	
-	/**
-	 * Method calls the cron class, which could easily be called directly.
-	 * However, this class keeps track of the cron instance without further
-	 * effort.
-	 * 
-	 * @SEE \Shorthand\Cron
-	 * 
-	 * @param type $args
-	 * @return \Shorthand\Cron
-	 */
-	public function cron( $args ) {
-		
-		require_once dirname(__file__).DS.'cron.php';
-
-		$defaults = array(
-		    'handle'	=> \Shorthand\create_guid(),
-		    'callback'	=> '\Shorthand\hello_world',
-		    'single'	=> true,
-		    'schedule'	=> 60,
-		    'time'	=> false,
-		    'stop'	=> false,
-		    'direct'	=> false,
-		    'debug'	=> false
-		);
-		
-		extract(wp_parse_args($args, $defaults));
-		
-		$this->_cron[$handle] = \Shorthand\Cron::getInstance($handle, array(
-			'callback'	=> $callback,
-			'single'	=> $single,
-			'schedule'	=> $schedule,
-			'time'		=> $time,
-			'stop'		=> $stop,
-			'debug'		=> $debug
-			));
-		
-		// make this callback available directly
-		if ($direct) {
-			add_action("wp_ajax_$handle", $callback);
-			add_action("wp_ajax_nopriv_$handle", $callback);
-			
-			$debug_callback = array($this->_cron[$handle], 
-						'force_debug');
-			
-			add_action("wp_ajax_$handle", $debug_callback);
-			add_action("wp_ajax_nopriv_$handle", $debug_callback);
-		}
-		
-		return $this->_cron[$handle];
-	}
-	
-	/**
-	 * Method returns a global instance of the \Shorthand\Cron class
-	 * 
-	 * @param type $handle
-	 * @return \Shorthand\Cron
-	 */
-	public function get_cron( $handle ) {
-		return isset($this->_cron[$handle]) ? $this->_cron[$handle]: null;
-	}
-	
-	protected $_widgets = array();
-	
-	/**
-	 * Method creates a new widget and stores the instance for later use
-	 * 
-	 * @param type $args
-	 * @return \Shorthand\Widget
-	 */
-	public function widget( $args ) {
-		
-		require_once dirname(__file__).DS.'widget.php';
-
-		$defaults = array(
-		    'name'	=> 'Unnamed Widget',
-		    'description' => '',
-		    'fields'	=> array(
-			array(
-			    'type' => 'notification'
-			)
-		    )
-		);
-		
-		$args = wp_parse_args($args, $defaults);
-		
-		$this->_widgets[$name] = new \Shorthand\Widget($args);
-		
-		return $this->_widgets[$name];
-	}
-	
 	/**
 	 * Method returns an instance of the widget
 	 * 
 	 * @param type $identifier
-	 * @return \Shorthand\Widget
+	 * @return Widget
 	 */
 	public function get_widget( $identifier ) {
 		// @TODO locate the widget outside of this static variable
@@ -576,7 +731,7 @@ class Plugin {
 		$dirs = array();
 		
 		// The active theme directory
-		$dirs[] =  \Shorthand\get_theme_path().DS.
+		$dirs[] =  get_theme_path().DS.
 				$this->get_plugin_dir_name().DS.$subdirectory;
 		
 		// @TODO The Parent theme directory
@@ -602,12 +757,12 @@ class Plugin {
 	
 	
 	public function get_plugin_dir() {
-		return \Shorthand\clean_path( 
+		return clean_path( 
 			WP_PLUGIN_DIR.DS.$this->get_plugin_dir_name() );
 	}
 	
 	public function get_shorthand_dir() {
-		return \Shorthand\clean_path( plugin_dir_path(__dir__) );
+		return clean_path( plugin_dir_path(__dir__) );
 	}
 	
 	/**

@@ -27,22 +27,19 @@ namespace Shorthand;
 
 defined('ABSPATH') or die('Direct access to files is not allowed.');
 
+
 /**
- * Function strips all characters but a-z, A-Z, 0-9, underscores, and dashes
+ * API function makes it quick and painless to request a specific administrative option
+ * from the admin settings page desired.
  * 
- * @param type $uncleanStr
- * @return string $cleanStr
+ * @param string $object_id
+ * @param string $property
+ * @param mixed $default
+ * @param boolean $single
  */
-function slug($string) {
-	//Unwanted:  {UPPERCASE} ; / ? : @ & = + $ , . ! ~ * ' ( )
-	$string = strtolower($string);
-	//Strip any unwanted characters
-	$string = preg_replace("/[^a-z0-9_\s-]/", "", $string);
-	//Clean multiple dashes or whitespaces
-	$string = preg_replace("/[\s-]+/", " ", $string);
-	//Convert whitespaces and underscore to dash
-	$string = preg_replace("/[\s_]/", "-", $string);
-	return $string;
+function option( $object_id, $property, $default = false, $single = true )
+{
+	return AdminPage::getInstance($object_id)->getOption($property, $default, $single);
 }
 
 /**
@@ -68,6 +65,47 @@ function locate( $needle, $haystack = array() ) {
 		break;
 	}
 	return $fullpath;
+}
+
+/**
+ * @SEE get_template
+ * @param type $file
+ * @param type $args
+ */
+function show( $file, $args = array() ) {
+	echo get_template($file, $args);
+}
+
+/**
+ * Function loads the requested file and returns it as a string
+ * 
+ * @param type $file
+ * @param type $args
+ * @return string
+ */
+function get_template( $file, $args = array() ) {
+	ob_start();
+	extract($args);
+	include $file;
+	return ob_get_clean();
+}
+
+/**
+ * Function strips all characters but a-z, A-Z, 0-9, underscores, and dashes
+ * 
+ * @param type $uncleanStr
+ * @return string $cleanStr
+ */
+function slug($string) {
+	//Unwanted:  {UPPERCASE} ; / ? : @ & = + $ , . ! ~ * ' ( )
+	$string = strtolower($string);
+	//Strip any unwanted characters
+	$string = preg_replace("/[^a-z0-9_\s-]/", "", $string);
+	//Clean multiple dashes or whitespaces
+	$string = preg_replace("/[\s-]+/", " ", $string);
+	//Convert whitespaces and underscore to dash
+	$string = preg_replace("/[\s_]/", "-", $string);
+	return $string;
 }
 
 /**
@@ -132,8 +170,8 @@ function get_theme_folder() {
 	return array_pop($parts);
 }
 function get_theme_path() {
-	return \Shorthand\clean_path( get_theme_root().
-		DS.\Shorthand\get_theme_folder() );
+	return clean_path( get_theme_root().
+		DS.get_theme_folder() );
 }
 
 function clean_path( $uncleanPath ) {
@@ -152,7 +190,20 @@ function clean_url( $uncleanUrl ) {
  * @param type $dir
  */
 function dir_to_url( $dir ) {
-	return \Shorthand\clean_url(str_replace(\Shorthand\clean_path(ABSPATH),
+	return clean_url(str_replace(clean_path(ABSPATH),
 		get_bloginfo('home'),
 		$dir));
+}
+
+function get_page_url()
+{
+	return 'http'.((!empty($_SERVER['HTTPS']))?'s':'').'://'.
+		$_SERVER['SERVER_NAME'].$_SERVER['REQUEST_URI'];
+}
+
+function get_domain()
+{
+	$parts = parse_url("http:/"."/".str_replace("http:/"."/",'',
+		$_SERVER["SERVER_NAME"]));
+	return $parts['host'];
 }
