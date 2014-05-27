@@ -86,7 +86,7 @@ class Plugin {
 		// check to see if we're upgrading or downgrading this plugin
 		$version = get_option($this->get_plugin_dir_name().'-version');
 		if (!$version) {
-			$this->_installing();
+			$this->_install();
 			
 		} elseif (version_compare( $this->_version, $version, '>' )) {
 			$this->_upgrading($version);
